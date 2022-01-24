@@ -2,18 +2,16 @@ package main
 
 import (
 	"math/rand"
-	"regexp"
-	"strings"
 )
 
 type MarkovChain struct {
-	wordCounts        map[string]map[string]int
-	wordProbabilities map[string]map[string]float64
+	tokenCounts        map[string]map[string]int
+	tokenProbabilities map[string]map[string]float64
 }
 
 func NewMarkovChain() *MarkovChain {
 	return &MarkovChain{
-		wordCounts: make(map[string]map[string]int),
+		tokenCounts: make(map[string]map[string]int),
 	}
 }
 
@@ -22,60 +20,66 @@ func (m *MarkovChain) Sentence() string {
 }
 
 func (m *MarkovChain) SentenceStartingWith(firstWord string) string {
-	words := []string{}
-	if firstWord != "" {
-		words = append(words, firstWord)
+	sentence := firstWord
+	for nextToken := m.nextToken(firstWord); ; nextToken = m.nextToken(nextToken) {
+		if len(sentence) > 0 && !isPunctuation(nextToken) {
+			sentence += " "
+		}
+		sentence += nextToken
+		if isSentenceTermination(nextToken) {
+			break
+		}
 	}
-	for nextWord := m.nextWord(firstWord); nextWord != ""; nextWord = m.nextWord(nextWord) {
-		words = append(words, nextWord)
-	}
-	return strings.Join(words, " ") + "."
+	return sentence
 }
 
-func (m *MarkovChain) nextWord(word string) string {
-	if probabilities, ok := m.wordProbabilities[word]; ok {
+func (m *MarkovChain) nextToken(token string) string {
+	if probabilities, ok := m.tokenProbabilities[token]; ok {
 		roll := rand.Float64()
 		totalProbability := 0.0
-		for nextWord, probability := range probabilities {
+		for nextToken, probability := range probabilities {
 			totalProbability += probability
 			if roll < totalProbability {
-				return nextWord
+				return nextToken
 			}
 		}
 	}
 	return ""
 }
 
-var sentenceSplitRe = regexp.MustCompile(`\.\s*`)
-var spaceRe = regexp.MustCompile(`\s+`)
-
 func (m *MarkovChain) ReadText(text string) {
-	sentences := sentenceSplitRe.Split(text, -1)
-	for _, sentence := range sentences {
-		cleanSentence := strings.ReplaceAll(sentence, ",", "")
-		if cleanSentence == "" {
-			continue
+	tokens := splitTextToTokens(text)
+	for i, token := range tokens {
+		var precedingToken string
+		if i > 0 {
+			precedingToken = tokens[i-1]
 		}
-		words := spaceRe.Split(cleanSentence, -1)
-
-		for i, word := range words {
-			var precedingWord string
-			if i == 0 {
-				precedingWord = ""
-			} else {
-				precedingWord = words[i-1]
-			}
-
-			m.addWord(precedingWord, word)
+		if isSentenceTermination(precedingToken) {
+			precedingToken = ""
 		}
 
-		m.addWord(words[len(words)-1], "")
+		m.addToken(precedingToken, token)
+
+		if i == len(tokens)-1 && !isSentenceTermination(token) {
+			m.addToken(token, ".")
+		}
 	}
 }
 
+func (m *MarkovChain) addToken(token, nextToken string) {
+	counts, ok := m.tokenCounts[token]
+	if !ok {
+		counts = make(map[string]int)
+	}
+
+	count := counts[nextToken]
+	counts[nextToken] = count + 1
+	m.tokenCounts[token] = counts
+}
+
 func (m *MarkovChain) MakeProbabilities() {
-	m.wordProbabilities = make(map[string]map[string]float64)
-	for word, counts := range m.wordCounts {
+	m.tokenProbabilities = make(map[string]map[string]float64)
+	for token, counts := range m.tokenCounts {
 		total := 0
 		for _, count := range counts {
 			total += count
@@ -85,17 +89,6 @@ func (m *MarkovChain) MakeProbabilities() {
 		for nextWord, count := range counts {
 			probabilities[nextWord] = float64(count) / float64(total)
 		}
-		m.wordProbabilities[word] = probabilities
+		m.tokenProbabilities[token] = probabilities
 	}
-}
-
-func (m *MarkovChain) addWord(word, nextWord string) {
-	counts, ok := m.wordCounts[word]
-	if !ok {
-		counts = make(map[string]int)
-	}
-
-	count := counts[nextWord]
-	counts[nextWord] = count + 1
-	m.wordCounts[word] = counts
 }
