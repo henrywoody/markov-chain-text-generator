@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -19,11 +23,35 @@ func init() {
 }
 
 func main() {
+	var interactiveMode bool
+	flag.BoolVar(&interactiveMode, "i", false, "Interactive mode.")
+	flag.Parse()
+
+	text := sampleText
+
 	m := NewMarkovChain()
-	for _, line := range sampleText {
+	for _, line := range text {
 		m.ReadText(line)
 	}
-	m.MakeProbabilities()
+	m.UpdateProbabilities()
 
 	fmt.Println(m.Sentence())
+
+	if interactiveMode {
+		interactive(m)
+	}
+}
+
+func interactive(m *MarkovChain) {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("> ")
+		userInput, err := reader.ReadString('\n')
+		if err != nil {
+			panic(err)
+		}
+		m.ReadText(strings.TrimRight(userInput, "\n"))
+		m.UpdateProbabilities()
+		fmt.Println(m.Sentence())
+	}
 }

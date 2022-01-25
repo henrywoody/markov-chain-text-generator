@@ -77,7 +77,7 @@ func (m *MarkovChain) addToken(token, nextToken string) {
 	m.tokenCounts[token] = counts
 }
 
-func (m *MarkovChain) MakeProbabilities() {
+func (m *MarkovChain) UpdateProbabilities() {
 	m.tokenProbabilities = make(map[string]map[string]float64)
 	for token, counts := range m.tokenCounts {
 		total := 0
